@@ -425,46 +425,81 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12 px-4">
+      <footer className="bg-gray-900 text-gray-400 py-12 px-4 border-t border-gray-800">
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg hero-gradient flex items-center justify-center">
                   <span className="text-white font-bold text-sm">L</span>
                 </div>
                 <span className="font-bold text-lg text-white">LAMU-AI</span>
               </div>
-              <p className="text-sm">
-                Minimal research version of the Long-term Antimicrobial Use (LAMU-AI) project. Demonstrates hybrid vector search and multi-provider LLM pipelines.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-white mb-4">Project Context</h4>
               <p className="text-xs text-gray-400 leading-relaxed">
-                This repository is a minimal demonstration prototype inspired by veterinary antimicrobial surveillance research (FARAD / 1DATA concepts).
+                Minimal demonstration prototype for real-time antimicrobial usage surveillance, clinical NER, and multi-provider RAG pipelines.
               </p>
             </div>
+
             <div>
-              <h4 className="font-semibold text-white mb-4">Architecture</h4>
-              <ul className="space-y-2 text-sm">
+              <h4 className="font-semibold text-white mb-3 text-sm">Official Research Project</h4>
+              <p className="text-xs text-gray-400 leading-relaxed mb-2">
+                <strong className="text-gray-300">Bridging Critical Data Gaps in Veterinary Medicine Via Artificial Intelligence and Advanced Large Language Models to Procure Real-Time Antibiotic Use Data in Livestock, Poultry and Companion Animals</strong>
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-white mb-3 text-sm">Project Scope</h4>
+              <ul className="space-y-1.5 text-xs text-gray-400">
+                <li><strong className="text-gray-300">AIM 1:</strong> Cattle, swine, poultry usage data extraction</li>
+                <li><strong className="text-gray-300">AIM 2:</strong> Sheep, goats, dogs, cats extra-label data</li>
                 <li>MongoDB Atlas ($vectorSearch)</li>
-                <li>FastAPI Hybrid RAG Pipeline</li>
-                <li>Multi-Provider LLM Engine</li>
-                <li>Default Response Extractive Mode</li>
+                <li>Clinical Named Entity Recognition</li>
+                <li>Multi-Provider LLM & Extractive Synthesis</li>
               </ul>
             </div>
+
             <div>
-              <h4 className="font-semibold text-white mb-4">References</h4>
-              <ul className="space-y-2 text-sm">
-                <li><a href="https://www.farad.org" className="hover:text-white transition-colors" target="_blank" rel="noreferrer">FARAD Public Portal</a></li>
-                <li><a href="https://www.fda.gov/animal-veterinary" className="hover:text-white transition-colors" target="_blank" rel="noreferrer">FDA Veterinary</a></li>
-                <li><a href="https://www.nal.usda.gov" className="hover:text-white transition-colors" target="_blank" rel="noreferrer">USDA NAL</a></li>
+              <h4 className="font-semibold text-white mb-3 text-sm">Official Links</h4>
+              <ul className="space-y-2 text-xs">
+                <li>
+                  <a
+                    href="https://www.nal.usda.gov/research-tools/food-safety-research-projects/bridging-critical-data-gaps-veterinary-medicine-artificial-intelligence-and-advanced-large-language"
+                    className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span>USDA NAL Research Project</span>
+                    <span className="text-[10px]">↗</span>
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="https://reporter.nih.gov/search/A231fxkb9kqSG-JkibCxjA/project-details/11088668"
+                    className="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span>NIH RePORTER (#11088668)</span>
+                    <span className="text-[10px]">↗</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.farad.org" className="hover:text-white transition-colors" target="_blank" rel="noreferrer">
+                    FARAD Databank Portal
+                  </a>
+                </li>
+                <li>
+                  <a href="https://www.fda.gov/animal-veterinary" className="hover:text-white transition-colors" target="_blank" rel="noreferrer">
+                    FDA Center for Veterinary Medicine
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-sm text-center text-gray-500">
-            Minimal Version Prototype · For demonstration and research evaluation
+
+          <div className="border-t border-gray-800 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-500">
+            <span>USDA National Agricultural Library · Food Safety Research Projects Database</span>
+            <span>Minimal Version Demonstration Prototype · Research & Evaluation</span>
           </div>
         </div>
       </footer>
