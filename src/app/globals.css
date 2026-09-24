@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 250 250 250;
+    --foreground: 15 23 42;
+  }
+
+  body {
+    @apply bg-gray-50 text-slate-900 antialiased;
+  }
+}
+
+@layer components {
+  .stat-card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow duration-200;
+  }
+
+  .chart-card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-gray-600 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 text-sm font-medium;
+  }
+
+  .nav-link-active {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg bg-blue-50 text-blue-700 text-sm font-medium;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-approved {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-extra-label {
+    @apply badge bg-amber-100 text-amber-800;
+  }
+
+  .badge-prohibited {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-active {
+    @apply badge bg-emerald-100 text-emerald-700;
+  }
+
+  .badge-pending {
+    @apply badge bg-yellow-100 text-yellow-700;
+  }
+
+  .badge-error {
+    @apply badge bg-red-100 text-red-700;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-emerald-600;
+  }
+
+  .hero-gradient {
+    @apply bg-gradient-to-br from-blue-600 via-blue-700 to-emerald-600;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400;
+}
+
+/* Smooth animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s ease-in-out infinite;
+}
