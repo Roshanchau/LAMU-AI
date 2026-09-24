@@ -5,6 +5,7 @@ import {
   queryRAG,
   fetchConfig,
   updateConfig,
+  getBackendUrl,
   type RAGResponse,
   type RuntimeConfig,
   type LLMProviderInfo,
@@ -168,7 +169,7 @@ export default function QueryPage() {
       console.error("API error:", err);
       const errorMsg: Message = {
         role: 'assistant',
-        content: `⚠️ Error contacting Python backend: ${err.message || String(err)}. Please ensure FastAPI is running at http://127.0.0.1:8000.`,
+        content: `⚠️ Error contacting Python backend: ${err.message || String(err)}. Please ensure FastAPI is running at ${getBackendUrl()}.`,
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
@@ -547,7 +548,7 @@ export default function QueryPage() {
             </button>
           </form>
           <div className="flex items-center justify-between mt-2 text-[11px] text-gray-400">
-            <span>Directly wired to FastAPI backend (`http://127.0.0.1:8000/api/query`)</span>
+            <span>Directly wired to FastAPI backend (`{getBackendUrl()}/api/query`)</span>
             <span>Vector Engine: MongoDB Atlas ($vectorSearch)</span>
           </div>
         </div>

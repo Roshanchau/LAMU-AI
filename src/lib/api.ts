@@ -1,13 +1,53 @@
-// API client configured with Next.js proxy rewrites (/api/py) and direct fallback (http://127.0.0.1:8000/api)
+// API client configured with Next.js environment variables (NEXT_PUBLIC_BACKEND_URL, NEXT_PUBLIC_API_URL, BACKEND_URL)
+// Supports proxy rewrites (/api/py) and direct backend path fallback
+
+export function getBackendUrl(): string {
+  const configured =
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    (typeof window === 'undefined' ? process.env.BACKEND_URL : undefined) ||
+    'http://127.0.0.1:8000';
+  return configured.replace(/\/+$/, '');
+}
+
+export function getBaseApiPath(): string {
+  const customApi = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
+  if (customApi) return customApi;
+  return typeof window !== 'undefined' ? '/api/py' : `${getBackendUrl()}/api`;
+}
 
 function getApiEndpoints(path: string): string[] {
   const isBrowser = typeof window !== 'undefined';
-  if (isBrowser) {
-    // In browser: prefer same-origin proxy /api/py (zero CORS issues), with direct 8000 fallback
-    return [`/api/py${path}`, `http://127.0.0.1:8000/api${path}`, `http://localhost:8000/api${path}`];
+  const backend = getBackendUrl();
+  const customApi = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
+
+  const endpoints: string[] = [];
+
+  // 1. Explicitly configured custom API path if specified
+  if (customApi) {
+    endpoints.push(`${customApi}${path}`);
   }
-  // Server-side (Node.js)
-  return [`http://127.0.0.1:8000/api${path}`, `http://localhost:8000/api${path}`];
+
+  if (isBrowser) {
+    // 2. Same-origin Next.js proxy rewrite route (zero CORS issues)
+    endpoints.push(`/api/py${path}`);
+
+    // 3. Direct backend URL endpoint
+    endpoints.push(`${backend}/api${path}`);
+    if (backend !== 'http://127.0.0.1:8000') {
+      endpoints.push(`http://127.0.0.1:8000/api${path}`);
+    }
+    endpoints.push(`http://localhost:8000/api${path}`);
+  } else {
+    // Server-side (Node.js)
+    endpoints.push(`${backend}/api${path}`);
+    if (backend !== 'http://127.0.0.1:8000') {
+      endpoints.push(`http://127.0.0.1:8000/api${path}`);
+    }
+    endpoints.push(`http://localhost:8000/api${path}`);
+  }
+
+  // Deduplicate endpoints
+  return Array.from(new Set(endpoints));
 }
 
 async function requestBackend<T>(path: string, options: RequestInit = {}): Promise<{ data: T; isLive: boolean; error?: string }> {
@@ -35,7 +75,7 @@ async function requestBackend<T>(path: string, options: RequestInit = {}): Promi
   return {
     data: null as any,
     isLive: false,
-    error: lastError ? String(lastError) : "Failed to connect to Python FastAPI backend at http://127.0.0.1:8000",
+    error: lastError ? String(lastError) : `Failed to connect to Python FastAPI backend at ${getBackendUrl()}`,
   };
 }
 
