@@ -24,7 +24,7 @@ from models import (
     EmbeddingRequest, EmbeddingResponse,
     CrawlRequest, CrawlResult, CrawlBatchResult,
     DataQueryRequest, AntimicrobialRecord,
-    ModelInfo, PipelineHealth, VectorSearchRequest, VectorSearchResponse, VectorStoreStatus,
+    ModelInfo, VectorSearchRequest, VectorSearchResponse, VectorStoreStatus,
     RuntimeConfigRequest
 )
 from ner_pipeline import extract_entities
@@ -34,9 +34,6 @@ from crawler import crawl_url, crawl_all_sources
 from data_service import query_records, get_statistics
 from mongodb_vector import vector_store_instance
 
-
-# Track startup time for health endpoint
-STARTUP_TIME = time.time()
 
 # Models registry
 MODELS_REGISTRY: list[ModelInfo] = [
@@ -148,21 +145,8 @@ def root():
             "data": "/api/data/records",
             "statistics": "/api/data/statistics",
             "models": "/api/models",
-            "health": "/api/health",
         },
     }
-
-
-@app.get("/api/health", response_model=PipelineHealth, tags=["Health"])
-def health_check():
-    """Check pipeline health and status."""
-    return PipelineHealth(
-        status="healthy",
-        models_loaded=[m.name for m in MODELS_REGISTRY],
-        vector_store_docs=4884,
-        total_embeddings=156420,
-        uptime_seconds=round(time.time() - STARTUP_TIME, 1),
-    )
 
 
 @app.get("/api/config", tags=["Configuration"])

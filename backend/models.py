@@ -168,14 +168,6 @@ class ModelInfo(BaseModel):
     description: str
 
 
-class PipelineHealth(BaseModel):
-    status: str
-    models_loaded: list[str]
-    vector_store_docs: int
-    total_embeddings: int
-    uptime_seconds: float
-
-
 class VectorSearchRequest(BaseModel):
     query: str = Field(..., description="Query string to search for in vector space")
     limit: int = Field(default=5, ge=1, le=20)

@@ -154,32 +154,7 @@ export interface VectorSearchResponse {
   is_live: boolean;
 }
 
-export interface BackendHealth {
-  status: string;
-  models_loaded: string[];
-  vector_store_docs: number;
-  total_embeddings: number;
-  uptime_seconds: number;
-  is_live: boolean;
-}
-
-// 1. Health Check
-export async function checkBackendHealth(): Promise<BackendHealth> {
-  const { data, isLive } = await requestBackend<any>('/health', { cache: 'no-store' });
-  if (isLive && data) {
-    return { ...data, is_live: true };
-  }
-  return {
-    status: "offline",
-    models_loaded: [],
-    vector_store_docs: 0,
-    total_embeddings: 0,
-    uptime_seconds: 0,
-    is_live: false,
-  };
-}
-
-// 2. Named Entity Recognition
+// 1. Named Entity Recognition
 export async function extractNER(text: string, model: string = "auto"): Promise<NERResponse> {
   const { data, isLive, error } = await requestBackend<any>('/ner', {
     method: 'POST',

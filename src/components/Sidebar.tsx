@@ -1,9 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { checkBackendHealth, type BackendHealth } from '@/lib/api';
 
 const navigation = [
   {
@@ -79,17 +77,6 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [health, setHealth] = useState<BackendHealth | null>(null);
-
-  useEffect(() => {
-    // Initial health check
-    checkBackendHealth().then(h => setHealth(h));
-    // Interval check every 8 seconds
-    const interval = setInterval(() => {
-      checkBackendHealth().then(h => setHealth(h));
-    }, 8000);
-    return () => clearInterval(interval);
-  }, []);
 
   return (
     <aside className="fixed left-0 top-0 h-full w-64 bg-white border-r border-gray-200 z-40 flex flex-col">
@@ -132,25 +119,14 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Live Backend & MongoDB Status */}
+      {/* Architecture & Vector Store Details */}
       <div className="p-4 border-t border-gray-100 space-y-2">
-        <div className={`p-3 rounded-xl border text-xs ${
-          health?.is_live
-            ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900'
-            : 'bg-amber-50/70 border-amber-200 text-amber-900'
-        }`}>
-          <div className="flex items-center justify-between mb-1">
-            <span className="font-bold flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${health?.is_live ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-              FastAPI: {health?.is_live ? 'Connected' : 'Standby'}
-            </span>
-            <span className="font-mono text-[10px] opacity-75">port 8000</span>
-          </div>
-          <div className="text-[11px] text-gray-600 flex items-center justify-between mt-1 pt-1 border-t border-gray-200/50">
+        <div className="p-3 rounded-xl border border-gray-200 bg-gray-50/70 text-xs">
+          <div className="text-[11px] text-gray-700 flex items-center justify-between font-medium">
             <span>🍃 Vector Store</span>
             <span className="font-semibold text-emerald-700">MongoDB Atlas</span>
           </div>
-          <div className="text-[10px] text-gray-500 mt-0.5">
+          <div className="text-[10px] text-gray-500 mt-1">
             Architecture: Hybrid Vector RAG
           </div>
         </div>
