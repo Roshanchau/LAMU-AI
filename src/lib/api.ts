@@ -5,14 +5,14 @@ export function getBackendUrl(): string {
   const configured =
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     (typeof window === 'undefined' ? process.env.BACKEND_URL : undefined) ||
-    'http://127.0.0.1:8000';
+    'https://lamu-ai.onrender.com';
   return configured.replace(/\/+$/, '');
 }
 
 export function getBaseApiPath(): string {
   const customApi = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
   if (customApi) return customApi;
-  return typeof window !== 'undefined' ? '/api/py' : `${getBackendUrl()}/api`;
+  return typeof window !== 'undefined' ? `${getBackendUrl()}/api` : `${getBackendUrl()}/api`;
 }
 
 function getApiEndpoints(path: string): string[] {
@@ -27,24 +27,21 @@ function getApiEndpoints(path: string): string[] {
     endpoints.push(`${customApi}${path}`);
   }
 
-  if (isBrowser) {
-    // 2. Same-origin Next.js proxy rewrite route (zero CORS issues)
-    endpoints.push(`/api/py${path}`);
+  // 2. Direct deployed backend URL endpoint
+  endpoints.push(`${backend}/api${path}`);
 
-    // 3. Direct backend URL endpoint
-    endpoints.push(`${backend}/api${path}`);
-    if (backend !== 'http://127.0.0.1:8000') {
-      endpoints.push(`http://127.0.0.1:8000/api${path}`);
-    }
-    endpoints.push(`http://localhost:8000/api${path}`);
-  } else {
-    // Server-side (Node.js)
-    endpoints.push(`${backend}/api${path}`);
-    if (backend !== 'http://127.0.0.1:8000') {
-      endpoints.push(`http://127.0.0.1:8000/api${path}`);
-    }
-    endpoints.push(`http://localhost:8000/api${path}`);
+  if (isBrowser) {
+    // 3. Same-origin Next.js proxy rewrite route (zero CORS fallback)
+    endpoints.push(`/api/py${path}`);
   }
+
+  // 4. Deployed Render fallback if not already the configured backend
+  if (backend !== 'https://lamu-ai.onrender.com') {
+    endpoints.push(`https://lamu-ai.onrender.com/api${path}`);
+  }
+
+  // 5. Localhost fallback for local dev
+  endpoints.push(`http://127.0.0.1:8000/api${path}`);
 
   // Deduplicate endpoints
   return Array.from(new Set(endpoints));
