@@ -16,13 +16,9 @@ export default function DataExplorerPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Attempt fetching live records from FastAPI backend
+    // Attempt fetching live records from FastAPI backend on mount
     setLoading(true);
-    fetchRecords({
-      species: speciesFilter,
-      drug_class: classFilter,
-      status: statusFilter,
-    }).then(res => {
+    fetchRecords({ limit: 100 }).then(res => {
       if (res.is_live && res.data && res.data.length > 0) {
         // Map backend schema (snake_case) to frontend schema (camelCase)
         const mapped = res.data.map((r: any) => ({
@@ -49,16 +45,18 @@ export default function DataExplorerPage() {
         setIsLiveApi(false);
       }
       setLoading(false);
+    }).catch(() => {
+      setLoading(false);
     });
-  }, [speciesFilter, classFilter, statusFilter]);
+  }, []);
 
   const species = useMemo(() => [
-    'All', ...Array.from(new Set(antimicrobialRecords.map(r => r.species)))
-  ], []);
+    'All', ...Array.from(new Set(records.map(r => r.species)))
+  ], [records]);
 
   const drugClasses = useMemo(() => [
-    'All', ...Array.from(new Set(antimicrobialRecords.map(r => r.drugClass)))
-  ], []);
+    'All', ...Array.from(new Set(records.map(r => r.drugClass)))
+  ], [records]);
 
   const filtered = useMemo(() => {
     let data = records;
@@ -71,11 +69,9 @@ export default function DataExplorerPage() {
         r.id.toLowerCase().includes(s)
       );
     }
-    if (!isLiveApi) {
-      if (speciesFilter !== 'All') data = data.filter(r => r.species === speciesFilter);
-      if (classFilter !== 'All') data = data.filter(r => r.drugClass === classFilter);
-      if (statusFilter !== 'All') data = data.filter(r => r.status === statusFilter);
-    }
+    if (speciesFilter !== 'All') data = data.filter(r => r.species === speciesFilter);
+    if (classFilter !== 'All') data = data.filter(r => r.drugClass === classFilter);
+    if (statusFilter !== 'All') data = data.filter(r => r.status === statusFilter);
 
     data = [...data].sort((a, b) => {
       const aVal = (a as any)[sortField];

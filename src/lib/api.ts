@@ -1,69 +1,130 @@
-// API client configured with Next.js environment variables (NEXT_PUBLIC_BACKEND_URL, NEXT_PUBLIC_API_URL, BACKEND_URL)
-// Supports proxy rewrites (/api/py) and direct backend path fallback
+
+const RENDER_URL = 'https://lamu-ai.onrender.com';
+const IS_BROWSER = typeof window !== 'undefined';
+const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Render free tier can take a while to wake; keep this generous but bounded.
+const DEFAULT_TIMEOUT_MS = 20000;
 
 export function getBackendUrl(): string {
   const configured =
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     (typeof window === 'undefined' ? process.env.BACKEND_URL : undefined) ||
-    'https://lamu-ai.onrender.com';
+    RENDER_URL;
   return configured.replace(/\/+$/, '');
 }
 
 export function getBaseApiPath(): string {
   const customApi = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
   if (customApi) return customApi;
-  return typeof window !== 'undefined' ? `${getBackendUrl()}/api` : `${getBackendUrl()}/api`;
+  return `${getBackendUrl()}/api`;
 }
 
+// Base prefix (everything before `path`) of the last endpoint that worked.
+let cachedBase: string | null = null;
+
 function getApiEndpoints(path: string): string[] {
-  const isBrowser = typeof window !== 'undefined';
   const backend = getBackendUrl();
   const customApi = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
 
   const endpoints: string[] = [];
 
-  // 1. Explicitly configured custom API path if specified
+  // 1. Same-origin Next.js proxy rewrite (no CORS, no preflight)
+  if (IS_BROWSER) {
+    endpoints.push(`/api/py${path}`);
+  }
+
+  // 2. Explicitly configured custom API path
   if (customApi) {
     endpoints.push(`${customApi}${path}`);
   }
 
-  // 2. Direct deployed backend URL endpoint
+  // 3. Direct backend
   endpoints.push(`${backend}/api${path}`);
 
-  if (isBrowser) {
-    // 3. Same-origin Next.js proxy rewrite route (zero CORS fallback)
-    endpoints.push(`/api/py${path}`);
+  // 4. Render fallback if it isn't already the configured backend
+  if (backend !== RENDER_URL) {
+    endpoints.push(`${RENDER_URL}/api${path}`);
   }
 
-  // 4. Deployed Render fallback if not already the configured backend
-  if (backend !== 'https://lamu-ai.onrender.com') {
-    endpoints.push(`https://lamu-ai.onrender.com/api${path}`);
+  // 5. Localhost fallback for local dev only
+  if (!IS_PROD) {
+    endpoints.push(`http://127.0.0.1:8000/api${path}`);
   }
 
-  // 5. Localhost fallback for local dev
-  endpoints.push(`http://127.0.0.1:8000/api${path}`);
+  const unique = Array.from(new Set(endpoints));
 
-  // Deduplicate endpoints
-  return Array.from(new Set(endpoints));
+  // Try the last known working endpoint first
+  if (cachedBase) {
+    const preferred = `${cachedBase}${path}`;
+    const idx = unique.indexOf(preferred);
+    if (idx > 0) {
+      unique.splice(idx, 1);
+      unique.unshift(preferred);
+    }
+  }
+
+  return unique;
 }
 
-async function requestBackend<T>(path: string, options: RequestInit = {}): Promise<{ data: T; isLive: boolean; error?: string }> {
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  // Respect a caller-provided signal as well
+  const external = options.signal;
+  if (external) {
+    if (external.aborted) ctrl.abort();
+    else external.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
+
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+type BackendResult<T> = { data: T; isLive: boolean; error?: string };
+
+interface RequestExtras {
+  timeoutMs?: number;
+  /** Cache successful GET responses in memory for this many ms. */
+  cacheTtlMs?: number;
+}
+
+const inflight = new Map<string, Promise<BackendResult<any>>>();
+const responseCache = new Map<string, { at: number; result: BackendResult<any> }>();
+
+async function doRequest<T>(
+  path: string,
+  options: RequestInit,
+  timeoutMs: number
+): Promise<BackendResult<T>> {
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  // Only set Content-Type when sending a body, so plain GETs stay "simple" requests
+  if (options.body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const endpoints = getApiEndpoints(path);
-  let lastError: any = null;
+  let lastError: unknown = null;
 
   for (const url of endpoints) {
     try {
-      const res = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.headers || {}),
-        },
-      });
+      const res = await fetchWithTimeout(url, { ...options, headers }, timeoutMs);
       if (res.ok) {
-        const json = await res.json();
+        const json = (await res.json()) as T;
+        cachedBase = url.slice(0, url.length - path.length);
         return { data: json, isLive: true };
       }
+      lastError = new Error(`${res.status} ${res.statusText} from ${url}`);
     } catch (err) {
       lastError = err;
     }
@@ -72,8 +133,68 @@ async function requestBackend<T>(path: string, options: RequestInit = {}): Promi
   return {
     data: null as any,
     isLive: false,
-    error: lastError ? String(lastError) : `Failed to connect to Python FastAPI backend at ${getBackendUrl()}`,
+    error: lastError
+      ? String(lastError)
+      : `Failed to connect to Python FastAPI backend at ${getBackendUrl()}`,
   };
+}
+
+async function requestBackend<T>(
+  path: string,
+  options: RequestInit = {},
+  extras: RequestExtras = {}
+): Promise<BackendResult<T>> {
+  const method = (options.method || 'GET').toUpperCase();
+  const timeoutMs = extras.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  // Only GETs are cached / de-duplicated
+  if (method !== 'GET') {
+    return doRequest<T>(path, options, timeoutMs);
+  }
+
+  const key = `GET ${path}`;
+
+  if (extras.cacheTtlMs) {
+    const hit = responseCache.get(key);
+    if (hit && Date.now() - hit.at < extras.cacheTtlMs) {
+      return hit.result as BackendResult<T>;
+    }
+  }
+
+  const existing = inflight.get(key);
+  if (existing) return existing as Promise<BackendResult<T>>;
+
+  const promise = doRequest<T>(path, options, timeoutMs)
+    .then((result) => {
+      if (result.isLive && extras.cacheTtlMs) {
+        responseCache.set(key, { at: Date.now(), result });
+      }
+      return result;
+    })
+    .finally(() => {
+      inflight.delete(key);
+    });
+
+  inflight.set(key, promise);
+  return promise;
+}
+
+/** Clear cached GET responses (e.g. after a crawl or config change). */
+export function clearApiCache(): void {
+  responseCache.clear();
+}
+
+/**
+ * Fire-and-forget ping to wake a sleeping backend (Render free tier).
+ * Call once early, e.g. in your root layout:
+ *   useEffect(() => { warmUpBackend(); }, []);
+ */
+export function warmUpBackend(): void {
+  if (!IS_BROWSER) return;
+  const targets = [`${getBackendUrl()}/api/health`, `/api/py/health`];
+  for (const url of targets) {
+    fetch(url, { method: 'GET', cache: 'no-store' }).catch(() => {});
+  }
 }
 
 export interface NEREntity {
@@ -152,7 +273,7 @@ export interface VectorSearchResponse {
 }
 
 // 1. Named Entity Recognition
-export async function extractNER(text: string, model: string = "auto"): Promise<NERResponse> {
+export async function extractNER(text: string, model: string = 'auto'): Promise<NERResponse> {
   const { data, isLive, error } = await requestBackend<any>('/ner', {
     method: 'POST',
     body: JSON.stringify({ text, model }),
@@ -162,43 +283,51 @@ export async function extractNER(text: string, model: string = "auto"): Promise<
     return { ...data, is_live: true };
   }
 
-  throw new Error(error || "Failed to reach Python backend /api/ner");
+  throw new Error(error || 'Failed to reach Python backend /api/ner');
 }
 
-// 3. RAG Query
+// 3. RAG Query (LLM calls can be slow, so allow a longer timeout)
 export async function queryRAG(
   query: string,
-  model: string = "auto",
+  model: string = 'auto',
   provider?: string,
   top_k: number = 5
 ): Promise<RAGResponse> {
-  const { data, isLive, error } = await requestBackend<any>('/query', {
-    method: 'POST',
-    body: JSON.stringify({ query, model, provider, top_k, include_sources: true }),
-  });
+  const { data, isLive, error } = await requestBackend<any>(
+    '/query',
+    {
+      method: 'POST',
+      body: JSON.stringify({ query, model, provider, top_k, include_sources: true }),
+    },
+    { timeoutMs: 60000 }
+  );
 
   if (isLive && data) {
     return { ...data, is_live: true };
   }
 
-  throw new Error(error || "Failed to reach Python backend /api/query");
+  throw new Error(error || 'Failed to reach Python backend /api/query');
 }
 
 // 4. Vector Store Status (MongoDB)
 export async function fetchVectorStoreStatus(): Promise<VectorStoreStatus> {
-  const { data, isLive } = await requestBackend<any>('/vector-store/status', { cache: 'no-store' });
+  const { data, isLive } = await requestBackend<any>(
+    '/vector-store/status',
+    { cache: 'no-store' },
+    { cacheTtlMs: 15000 }
+  );
   if (isLive && data) {
     return { ...data, is_live: true };
   }
   return {
-    database: "lamu_db",
-    collection: "vector_store",
-    index_name: "vector_index_vetbert",
+    database: 'lamu_db',
+    collection: 'vector_store',
+    index_name: 'vector_index_vetbert',
     dimensions: 768,
-    similarity: "cosine",
+    similarity: 'cosine',
     total_vectors: 0,
     connected_to_atlas: false,
-    engine: "FastAPI Vector Engine",
+    engine: 'FastAPI Vector Engine',
     index_spec: {},
     is_live: false,
   };
@@ -225,18 +354,21 @@ export async function searchVectorStore(
     return { ...data, is_live: true };
   }
 
-  throw new Error(error || "Failed to reach Python backend /api/vector-store/search");
+  throw new Error(error || 'Failed to reach Python backend /api/vector-store/search');
 }
 
 // 6. Fetch Records
-export async function fetchRecords(params: {
-  species?: string;
-  drug_class?: string;
-  status?: string;
-  year?: number;
-  region?: string;
-  limit?: number;
-} = {}) {
+export async function fetchRecords(
+  params: {
+    species?: string;
+    drug_class?: string;
+    status?: string;
+    year?: number;
+    region?: string;
+    limit?: number;
+  } = {},
+  opts: { signal?: AbortSignal; cacheTtlMs?: number } = {}
+) {
   const query = new URLSearchParams();
   if (params.species && params.species !== 'All') query.append('species', params.species);
   if (params.drug_class && params.drug_class !== 'All') query.append('drug_class', params.drug_class);
@@ -245,35 +377,50 @@ export async function fetchRecords(params: {
   if (params.region && params.region !== 'All') query.append('region', params.region);
   if (params.limit) query.append('limit', String(params.limit));
 
-  const { data, isLive } = await requestBackend<any[]>(`/data/records?${query.toString()}`, { cache: 'no-store' });
-  return { data, is_live: isLive };
+  const qs = query.toString();
+  const { data, isLive, error } = await requestBackend<any[]>(
+    `/data/records${qs ? `?${qs}` : ''}`,
+    { cache: 'no-store', signal: opts.signal },
+    { cacheTtlMs: opts.cacheTtlMs ?? 30000 }
+  );
+  return { data: data ?? [], is_live: isLive, error };
 }
 
 // 7. Crawl URL & Mutate to Vector Store
 export async function crawlUrl(url: string, mutateToStore: boolean = true) {
-  const { data, isLive, error } = await requestBackend<any>('/crawl', {
-    method: 'POST',
-    body: JSON.stringify({ url, extract_entities: true, mutate_to_store: mutateToStore }),
-  });
+  const { data, isLive, error } = await requestBackend<any>(
+    '/crawl',
+    {
+      method: 'POST',
+      body: JSON.stringify({ url, extract_entities: true, mutate_to_store: mutateToStore }),
+    },
+    { timeoutMs: 120000 }
+  );
 
   if (isLive && data) {
+    clearApiCache();
     return { ...data, is_live: true };
   }
 
-  throw new Error(error || "Failed to reach Python backend /api/crawl");
+  throw new Error(error || 'Failed to reach Python backend /api/crawl');
 }
 
 export async function crawlAllSources() {
-  const { data, isLive, error } = await requestBackend<any>('/crawl/all', {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
+  const { data, isLive, error } = await requestBackend<any>(
+    '/crawl/all',
+    {
+      method: 'POST',
+      body: JSON.stringify({}),
+    },
+    { timeoutMs: 300000 }
+  );
 
   if (isLive && data) {
+    clearApiCache();
     return { ...data, is_live: true };
   }
 
-  throw new Error(error || "Failed to reach Python backend /api/crawl/all");
+  throw new Error(error || 'Failed to reach Python backend /api/crawl/all');
 }
 
 // 8. Runtime Config (MongoDB URI + Multi-provider LLMs)
@@ -320,21 +467,25 @@ export interface RuntimeConfig {
 }
 
 export async function fetchConfig(): Promise<RuntimeConfig> {
-  const { data, isLive } = await requestBackend<RuntimeConfig>('/config', { cache: 'no-store' });
+  const { data, isLive } = await requestBackend<RuntimeConfig>(
+    '/config',
+    { cache: 'no-store' },
+    { cacheTtlMs: 15000 }
+  );
   if (isLive && data) {
     return data;
   }
   return {
     mongodb_connected: false,
     mongodb_uri_set: false,
-    mongodb_engine: "in-memory",
+    mongodb_engine: 'in-memory',
     llm_connected: false,
-    active_provider: "groq",
-    provider_name: "Groq",
-    provider_badge: "Free & Ultra-Fast",
-    provider_env_key: "GROQ_API_KEY",
-    active_model: "llama-3.1-8b-instant",
-    active_base_url: "https://api.groq.com/openai/v1",
+    active_provider: 'groq',
+    provider_name: 'Groq',
+    provider_badge: 'Free & Ultra-Fast',
+    provider_env_key: 'GROQ_API_KEY',
+    active_model: 'llama-3.1-8b-instant',
+    active_base_url: 'https://api.groq.com/openai/v1',
     has_api_key: false,
     available_providers: [],
   };
@@ -358,7 +509,8 @@ export async function updateConfig(payload: {
   });
 
   if (isLive && data) {
+    clearApiCache();
     return data;
   }
-  throw new Error(error || "Failed to update configuration");
+  throw new Error(error || 'Failed to update configuration');
 }
